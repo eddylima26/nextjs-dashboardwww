@@ -29,8 +29,8 @@ import Image from 'next/image';
 
 
 export const metadata = {
-  title: 'My App',
-  description: 'A great app',
+  title: 'BIR',
+  description: 'A Burn-In-Rack application',
   icons: {
     icon: '/logo.jpg', // must be in /public
   },
