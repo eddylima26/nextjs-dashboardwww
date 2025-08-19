@@ -1,4 +1,4 @@
-import '@/app/ui/global.css';
+/*import '@/app/ui/global.css';
 import { inter } from '@/app/ui/fonts';
 import { Metadata } from 'next';
  
@@ -19,6 +19,27 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.className} antialiased`}>{children}</body>
+    </html>
+  );
+}*/
+// app/layout.tsx
+import '@/app/ui/global.css'
+import type { Metadata } from 'next';
+import Image from 'next/image';
+
+
+export const metadata = {
+  title: 'My App',
+  description: 'A great app',
+  icons: {
+    icon: '/logo.jpg', // must be in /public
+  },
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
     </html>
   );
 }
