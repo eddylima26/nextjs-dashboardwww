@@ -1,4 +1,4 @@
-import postgres from 'postgres';
+/*import postgres from 'postgres';
 import {
   CustomerField,
   CustomersTableType,
@@ -30,7 +30,7 @@ export async function fetchRevenue() {
   }
 }
 
-export async function fetchLatestInvoices() {
+/*export async function fetchLatestInvoices() {
   try {
     const data = await sql<LatestInvoiceRaw[]>`
       SELECT invoices.amount, customers.name, customers.image_url, customers.email, invoices.id
@@ -216,4 +216,4 @@ export async function fetchFilteredCustomers(query: string) {
     console.error('Database Error:', err);
     throw new Error('Failed to fetch customer table.');
   }
-}
+} */

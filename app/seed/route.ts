@@ -1,117 +1,122 @@
-import bcrypt from 'bcrypt';
+// app/seed/route.ts
 import postgres from 'postgres';
-import { invoices, customers, revenue, users } from '../lib/placeholder-data';
+import { NextResponse } from 'next/server';
 
+export const runtime = 'nodejs';
+
+// If your env var is DATABASE_URL, change POSTGRES_URL below to DATABASE_URL.
 const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
 
-async function seedUsers() {
-  await sql`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`;
-  await sql`
-    CREATE TABLE IF NOT EXISTS users (
-      id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-      name VARCHAR(255) NOT NULL,
-      email TEXT NOT NULL UNIQUE,
-      password TEXT NOT NULL
-    );
-  `;
+/**
+ * >>> EDIT THESE TO RESHAPE THE GRID <<<
+ * 8 rows × 4 cols, but SKIP the cell at (row=1, col=4)
+ */
+const ROWS = 8;
+const COLS = 4;
+const SKIP: Array<[number, number]> = [[1, 4]];
 
-  const insertedUsers = await Promise.all(
-    users.map(async (user) => {
-      const hashedPassword = await bcrypt.hash(user.password, 10);
-      return sql`
-        INSERT INTO users (id, name, email, password)
-        VALUES (${user.id}, ${user.name}, ${user.email}, ${hashedPassword})
-        ON CONFLICT (id) DO NOTHING;
-      `;
-    }),
-  );
-
-  return insertedUsers;
-}
-
-async function seedInvoices() {
-  await sql`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`;
-
-  await sql`
-    CREATE TABLE IF NOT EXISTS invoices (
-      id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-      customer_id UUID NOT NULL,
-      amount INT NOT NULL,
-      status VARCHAR(255) NOT NULL,
-      date DATE NOT NULL
-    );
-  `;
-
-  const insertedInvoices = await Promise.all(
-    invoices.map(
-      (invoice) => sql`
-        INSERT INTO invoices (customer_id, amount, status, date)
-        VALUES (${invoice.customer_id}, ${invoice.amount}, ${invoice.status}, ${invoice.date})
-        ON CONFLICT (id) DO NOTHING;
-      `,
-    ),
-  );
-
-  return insertedInvoices;
-}
-
-async function seedCustomers() {
-  await sql`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`;
-
-  await sql`
-    CREATE TABLE IF NOT EXISTS customers (
-      id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-      name VARCHAR(255) NOT NULL,
-      email VARCHAR(255) NOT NULL,
-      image_url VARCHAR(255) NOT NULL
-    );
-  `;
-
-  const insertedCustomers = await Promise.all(
-    customers.map(
-      (customer) => sql`
-        INSERT INTO customers (id, name, email, image_url)
-        VALUES (${customer.id}, ${customer.name}, ${customer.email}, ${customer.image_url})
-        ON CONFLICT (id) DO NOTHING;
-      `,
-    ),
-  );
-
-  return insertedCustomers;
-}
-
-async function seedRevenue() {
-  await sql`
-    CREATE TABLE IF NOT EXISTS revenue (
-      month VARCHAR(4) NOT NULL UNIQUE,
-      revenue INT NOT NULL
-    );
-  `;
-
-  const insertedRevenue = await Promise.all(
-    revenue.map(
-      (rev) => sql`
-        INSERT INTO revenue (month, revenue)
-        VALUES (${rev.month}, ${rev.revenue})
-        ON CONFLICT (month) DO NOTHING;
-      `,
-    ),
-  );
-
-  return insertedRevenue;
-}
+/**
+ * Build a WHERE clause that excludes skipped cells, e.g.:
+ *   NOT (r=1 AND c=4) AND NOT (r=3 AND c=2)
+ */
+const skipClause =
+  SKIP.length > 0
+    ? SKIP.map(([r, c]) => `NOT (r=${r} AND c=${c})`).join(' AND ')
+    : '1=1';
 
 export async function GET() {
-  try {
-    const result = await sql.begin((sql) => [
-      seedUsers(),
-      seedCustomers(),
-      seedInvoices(),
-      seedRevenue(),
-    ]);
+  // Safety: never seed in production
+  if (process.env.NODE_ENV !== 'development') {
+    return NextResponse.json({ error: 'Not allowed in production' }, { status: 403 });
+  }
 
-    return Response.json({ message: 'Database seeded successfully' });
-  } catch (error) {
-    return Response.json({ error }, { status: 500 });
+  try {
+    // --- one statement per call (postgres library requirement) ---
+
+    // 1) Create enum (idempotent)
+    await sql/* sql */`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'rack_status') THEN
+          CREATE TYPE rack_status AS ENUM ('EMPTY','PLACE','IN_USE','READY');
+        END IF;
+      END$$;
+    `;
+
+    // 2) Create table (idempotent)
+    await sql/* sql */`
+      CREATE TABLE IF NOT EXISTS public.rack_slots (
+        id           SERIAL PRIMARY KEY,
+        row          INT NOT NULL,
+        col          INT NOT NULL,
+        status       rack_status NOT NULL DEFAULT 'EMPTY',
+        drone_sn     VARCHAR(32),
+
+        -- timer fields:
+        started_at   TIMESTAMPTZ,
+        burn_minutes INT,
+        ends_at      TIMESTAMPTZ,
+
+        updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+        CONSTRAINT rack_slots_row_col_unique UNIQUE (row, col)
+      );
+    `;
+
+    // 3) Unique index so one SN can’t be in two slots
+    await sql/* sql */`
+      CREATE UNIQUE INDEX IF NOT EXISTS rack_slots_drone_sn_unique
+      ON public.rack_slots (drone_sn) WHERE drone_sn IS NOT NULL;
+    `;
+
+    // 4) Exact reshape inside a transaction:
+    await sql.begin(async (tx) => {
+      // 4A) DELETE any rows not in our filtered grid (respects SKIP)
+      await tx/* sql */`
+        WITH grid AS (
+          SELECT r, c
+          FROM generate_series(1, ${ROWS}) AS r,
+               generate_series(1, ${COLS}) AS c
+          WHERE ${sql.unsafe(skipClause)}
+        )
+        DELETE FROM public.rack_slots rs
+        WHERE NOT EXISTS (
+          SELECT 1 FROM grid g WHERE g.r = rs.row AND g.c = rs.col
+        );
+      `;
+
+      // 4B) INSERT/RESET rows that are in the filtered grid (respects SKIP)
+      await tx/* sql */`
+        WITH grid AS (
+          SELECT r, c
+          FROM generate_series(1, ${ROWS}) AS r,
+               generate_series(1, ${COLS}) AS c
+          WHERE ${sql.unsafe(skipClause)}
+        )
+        INSERT INTO public.rack_slots (row, col)
+        SELECT r, c FROM grid
+        ON CONFLICT (row, col) DO UPDATE SET
+          status       = 'EMPTY',
+          drone_sn     = NULL,
+          started_at   = NULL,
+          burn_minutes = NULL,
+          ends_at      = NULL,
+          updated_at   = now();
+      `;
+    });
+
+    // 5) Return a summary
+    const [count] = await sql<{ n: number }[]>`
+      SELECT COUNT(*)::int AS n FROM public.rack_slots
+    `;
+
+    return NextResponse.json({
+      ok: true,
+      rows: ROWS,
+      cols: COLS,
+      skipped: SKIP,
+      totalSlots: count.n, // expect 8*4 - 1 = 31
+    });
+  } catch (err: any) {
+    return NextResponse.json({ ok: false, error: String(err?.message ?? err) }, { status: 500 });
   }
 }
