@@ -7,6 +7,7 @@ import { SlotGrid } from '@/app/burn-in-rack/SlotGrid'; // we'll create this nex
 import  ScanBox  from '@/app/burn-in-rack/ScanBox'; // a client component for scanning serial numbers
 import { lusitana } from '@/app/ui/fonts'; // import the Roboto font
 
+
 // Create one DB client for this file. It uses POSTGRES_URL from .env.local.
 // If your env var is DATABASE_URL instead, change it here to match.
 const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
@@ -46,7 +47,7 @@ export default async function BurnInPage() {
         <header className="flex items-end justify-between">
           <div>
             <h1 className="text-4xl font-bold bg-black text-white px-2 py-1 rounded">
-              Burn-In Rack (3×5)
+              Burn-In Rack ({maxRow}×{maxCol})
             </h1>
             <img
               src="/drone.webp"

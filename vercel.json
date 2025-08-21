@@ -1,8 +1,0 @@
-{
-  "crons": [
-    {
-      "path": "/api/notify-ready",
-      "schedule": "*/1 * * * *"
-    }
-  ]
-}

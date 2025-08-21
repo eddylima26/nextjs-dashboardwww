@@ -99,12 +99,23 @@ function SlotCard({ slot }: { slot: Slot }) {
       )}
 
       {/* Status or ticking timer */}
-      <div className="mt-2 text-xl tabular-nums">{readout}</div>
-      {slot.status === 'IN_USE' && done && (
-        <div className="mt-1 text-xs text-emerald-400">
-          Finished — mark READY when checked
-        </div>
-      )}
+<div className="mt-2 text-xl tabular-nums">{readout}</div>
+
+{done && (
+  <>
+    {slot.status === 'READY' && (
+      <div className="mt-1 text-xs text-emerald-400">
+        Ready — mark Clear when checked
+      </div>
+    )}
+    {slot.status === 'IN_USE' && (
+      <div className="mt-1 text-xs text-emerald-400">
+        Done — mark READY when checked
+      </div>
+    )}
+  </>
+)}
+
 
       <div className="mt-3 flex flex-wrap gap-2 text-sm">
         {/* ASSIGN HERE — pulls value from #scan-sn and sends to server */}
