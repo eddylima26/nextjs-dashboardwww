@@ -23,6 +23,14 @@ const skipClause =
   SKIP.length > 0
     ? SKIP.map(([r, c]) => `NOT (r=${r} AND c=${c})`).join(' AND ')
     : '1=1';
+    
+// Small helper to get a safe string from unknown errors
+function errorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === 'string') return e;
+  try { return JSON.stringify(e); } catch { return 'Unknown error'; }
+}
+
 
 export async function GET() {
   // Safety: never seed in production
@@ -116,7 +124,10 @@ export async function GET() {
       skipped: SKIP,
       totalSlots: count.n, // expect 8*4 - 1 = 31
     });
-  } catch (err: any) {
-    return NextResponse.json({ ok: false, error: String(err?.message ?? err) }, { status: 500 });
+  } catch (err: unknown) {
+    return NextResponse.json(
+      { ok: false, error: errorMessage(err) },
+      { status: 500 }
+    );
   }
 }

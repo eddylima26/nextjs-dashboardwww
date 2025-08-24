@@ -65,7 +65,7 @@ export function SlotGrid({
     className="grid gap-3"
     style={{
       gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
-      transform: 'scale(0.6)',           // scales everything to 80%
+      transform: 'scale(1.5)',           // scales everything to 80%
       transformOrigin: 'top left',        // keeps the grid anchored to the top left
     }}
   >
