@@ -57,9 +57,6 @@ export default async function BurnInPage() {
 
 
             <ScanBox />
-            <p className="text-sm text-zinc-500">
-              Read-only for now (visuals first). We’ll wire buttons next.
-            </p>
           </div>
         </header>
         <SlotGrid slots={slots} rows={maxRow} cols={maxCol} />
