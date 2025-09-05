@@ -128,7 +128,7 @@ function SlotCard({ slot }: { slot: Slot }) {
         </form>
 
         {/* Start fixed 50min timer (you can change 50 to any number) */}
-        <form action={startTimer.bind(null, slot.id, 1)}>
+        <form action={startTimer.bind(null, slot.id, 1440)}>
           <button type="submit" className="rounded bg-amber-600 px-3 py-1 text-white">
             Start 24h
           </button>
