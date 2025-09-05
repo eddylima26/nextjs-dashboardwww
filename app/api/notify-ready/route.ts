@@ -6,7 +6,7 @@ import { notifySlack } from '@/app/lib/slack';
 export const runtime = 'nodejs';
 const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
 
-type Row = { serial_id: string | null };
+type Row = { serial_id: string | null; row: number; col: number };
 
 export async function GET() {
   // Step 1: flip IN_USE → READY if timer done
@@ -26,12 +26,12 @@ export async function GET() {
       AND ends_at IS NOT NULL
       AND ends_at <= now()
       AND notified_at IS NULL
-    RETURNING serial_id
+    RETURNING serial_id, row, col
   `;
 
   for (const row of rows) {
     if (row.serial_id) {
-      await notifySlack(`🛩️ Drone *${row.serial_id}* completed burn-in and is READY for pickup.`);
+      await notifySlack(`🛩️ Drone *${row.serial_id}* completed burn-in and is READY for pickup. (Row ${row.row}, Column ${row.col})`);
     }
   }
 

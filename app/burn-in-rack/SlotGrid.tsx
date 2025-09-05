@@ -91,8 +91,11 @@ function SlotCard({ slot }: { slot: Slot }) {
       ? formatRemaining(ms)
       : slot.status;
 
+  // Compute visual status: if timer is done but DB status is still IN_USE, show as READY
+  const visualStatus = (slot.status === 'IN_USE' && done) ? 'READY' : slot.status;
+
   return (
-    <div className={['rounded-xl border-2 p-1 w-30 h-30', colorByStatus(slot.status)].join(' ')}>
+    <div className={['rounded-xl border-2 p-1 w-30 h-30', colorByStatus(visualStatus)].join(' ')}>
       <div className="text-xs opacity-70">Row {slot.row}, Col {slot.col}</div>
       {slot.serial_id && (
         <div className="text-xs font-mono text-black-400">SN: {slot.serial_id}</div>
@@ -102,18 +105,9 @@ function SlotCard({ slot }: { slot: Slot }) {
 <div className="mt-2 text-xl tabular-nums">{readout}</div>
 
 {done && (
-  <>
-    {slot.status === 'READY' && (
-      <div className="mt-1 text-xs text-emerald-400">
-        Ready — mark Clear when checked
-      </div>
-    )}
-    {slot.status === 'IN_USE' && (
-      <div className="mt-1 text-xs text-emerald-400">
-        Done — mark READY when checked
-      </div>
-    )}
-  </>
+  <div className="mt-1 text-xs text-emerald-400">
+    Ready
+  </div>
 )}
 
 
@@ -133,7 +127,7 @@ function SlotCard({ slot }: { slot: Slot }) {
           </button>
         </form>
 
-        {/* Start fixed 50m timer (you can change 50 to any number) */}
+        {/* Start fixed 50min timer (you can change 50 to any number) */}
         <form action={startTimer.bind(null, slot.id, 1)}>
           <button type="submit" className="rounded bg-amber-600 px-3 py-1 text-white">
             Start 24h

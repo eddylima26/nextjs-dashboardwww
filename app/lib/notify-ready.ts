@@ -7,7 +7,7 @@ const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
 export async function notifyReadyDrones() {
   // 1. Find expired timers still marked as IN_USE
   const expired = await sql/* sql */`
-    SELECT id, serial_id
+    SELECT id, serial_id, row, col
     FROM public.rack_slots
     WHERE ends_at <= now()
       AND status = 'IN_USE'
@@ -23,6 +23,6 @@ export async function notifyReadyDrones() {
       WHERE id = ${drone.id}
     `;
 
-    await notifySlack(`✅ Drone *${drone.serial_id}* is ready for pickup.`);
+    await notifySlack(`✅ Drone *${drone.serial_id}* is ready for pickup. (Row ${drone.row}, Column ${drone.col})`);
   }
 }

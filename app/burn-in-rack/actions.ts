@@ -56,12 +56,13 @@ function normalizeMinutes(value: unknown, max = 24 * 60): number | null {
 // - Puts the target slot into PLACE and clears any timer fields.
 // - Requires nothing else; you can call this right after scanning and selecting a slot.
 export async function assignToSlot(slotId: number, rawSn: unknown) {
-  // Validate inputs early
-  if (!Number.isInteger(slotId)) return;
+  try {
+    // Validate inputs early
+    if (!Number.isInteger(slotId)) return;
 
-  const serial_id = normalizeSN(rawSn);
-  if (!serial_id) return;                         // empty after normalization → no-op
-  if (!SN_REGEX.test(serial_id)) return;          // optional: reject bad formats silently (or throw)
+    const serial_id = normalizeSN(rawSn);
+    if (!serial_id) return;                         // empty after normalization → no-op
+    if (!SN_REGEX.test(serial_id)) return;          // optional: reject bad formats silently (or throw)
 
   await sql.begin(async (tx) => {
     // 1) Lock any existing slot that already has this SN (prevents races)
@@ -98,6 +99,10 @@ export async function assignToSlot(slotId: number, rawSn: unknown) {
 
   // Re-fetch data for the rack page so the UI updates
   revalidatePath('/burn-in-rack');
+  } catch (error) {
+    console.error('Error in assignToSlot:', error);
+    throw error; // Re-throw to let Next.js handle it
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -106,33 +111,39 @@ export async function assignToSlot(slotId: number, rawSn: unknown) {
 //   accidentally time an empty cell.
 // - Sets status → IN_USE and computes ends_at once; the client shows countdown.
 export async function startTimer(slotId: number, minutes: number) {
-  if (!Number.isInteger(slotId)) return;
+  try {
+    if (!Number.isInteger(slotId)) return;
 
-  const mins = normalizeMinutes(minutes, 24 * 60); // 1..1440 minutes (24h)
-  if (mins == null) return; // invalid or out of range
+    const mins = normalizeMinutes(minutes, 24 * 60); // 1..1440 minutes (24h)
+    if (mins == null) return; // invalid or out of range
 
-  await sql/* sql */`
-    UPDATE public.rack_slots
-    SET status       = 'IN_USE',
-        started_at   = now(),
-        burn_minutes = ${mins},
-        ends_at      = now() + (INTERVAL '1 minute' * ${mins}),
-        updated_at   = now()
-    WHERE id = ${slotId} AND serial_id IS NOT NULL
-  `;
+    await sql/* sql */`
+      UPDATE public.rack_slots
+      SET status       = 'IN_USE',
+          started_at   = now(),
+          burn_minutes = ${mins},
+          ends_at      = now() + (INTERVAL '1 minute' * ${mins}),
+          updated_at   = now()
+      WHERE id = ${slotId} AND serial_id IS NOT NULL
+    `;
 
-  revalidatePath('/burn-in-rack');
+    revalidatePath('/burn-in-rack');
+  } catch (error) {
+    console.error('Error in startTimer:', error);
+    throw error;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ACTION: Clear a slot back to EMPTY.
 // - Removes SN and wipes timer fields. Use when removing a unit or undoing.
 export async function clearSlot(slotId: number) {
-  if (!Number.isInteger(slotId)) return;
+  try {
+    if (!Number.isInteger(slotId)) return;
 
-  // Get slot data, especially ends_at and serial_id
+  // Get slot data, especially ends_at, serial_id, row, and col
   const [slot] = await sql<SlotRow[]>/* sql */`
-    SELECT ends_at, serial_id
+    SELECT ends_at, serial_id, row, col
     FROM public.rack_slots
     WHERE id = ${slotId}
   `;
@@ -152,8 +163,8 @@ export async function clearSlot(slotId: number) {
     const pretty = formatDuration(duration);
 
     slackMessage = remainingSec > 0
-      ? `🛩️ Drone *${slot.serial_id}* picked up *early* with ${pretty} remaining.`
-      : `🛩️ Drone *${slot.serial_id}* has been successfully picked up.`;
+      ? `🛩️ Drone *${slot.serial_id}* picked up *early* with ${pretty} remaining. (Row ${slot.row}, Column ${slot.col})`
+      : `🛩️ Drone *${slot.serial_id}* has been successfully picked up. (Row ${slot.row}, Column ${slot.col})`;
   }
 
   // Clear the slot
@@ -171,11 +182,19 @@ export async function clearSlot(slotId: number) {
   revalidatePath('/burn-in-rack');
 
   // Send Slack message
-   // Notify Slack using your function
+  // Notify Slack using your function
   if (slackMessage) {
-    await notifySlack(slackMessage);
+    try {
+      await notifySlack(slackMessage);
+    } catch (error) {
+      console.error('Slack notification failed:', error);
+      // Don't let Slack failure break the server action
+    }
   }
-
+  } catch (error) {
+    console.error('Error in clearSlot:', error);
+    throw error;
+  }
 }
 
 
